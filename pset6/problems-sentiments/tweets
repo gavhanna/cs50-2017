@@ -1,0 +1,45 @@
+#!/home/gav/Desktop/problems-sentiments/venv/bin/python3
+
+import os
+import sys
+
+from analyzer import Analyzer
+from termcolor import colored
+from helpers import get_user_timeline
+
+def main():
+
+    # export API_KEY=YZhftGLB8Yn12mOYfpD6KLtvw
+    # export API_SECRET=dEinQn0yfJjZrW2tfrX782CqT0amaz0QMcVRZR3Hc7FIkhnWqC
+
+
+    # ensure proper usage
+    if len(sys.argv) != 2:
+        sys.exit("Usage: ./tweet twitter_handle")
+    screen_name = sys.argv[1]
+
+    # absolute paths to lists
+    positives = os.path.join(sys.path[0], "positive-words.txt")
+    negatives = os.path.join(sys.path[0], "negative-words.txt")
+
+    # instantiate analyzer
+    analyzer = Analyzer(positives, negatives)
+
+    # queries Twitter’s API for a user’s most recent 50 tweets,
+    tweets = get_user_timeline(screen_name, count=50);
+
+    # analyzes the sentiment of each of those tweets
+    for tweet in tweets:
+        score = analyzer.analyze(tweet)
+        if score > 0.0:
+            tweet_score = str(score)
+            print(colored("\"" + tweet + "\"" + "\n" + "- With a score of: " + tweet_score, "green"))
+        elif score == 0.0:
+            tweet_score = str(score)
+            print(colored("\"" + tweet + "\"" + "\n" + "- With a score of: " + tweet_score, "yellow"))
+        elif score < 0.0:
+            tweet_score = str(score)
+            print(colored("\"" + tweet + "\"" + "\n" + "- With a score of: " + tweet_score, "red"))
+
+if __name__ == "__main__":
+    main()

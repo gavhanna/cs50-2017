@@ -1,0 +1,10 @@
+{% extends "layout.html" %}
+
+{% block subtext %}
+@{{ screen_name }}
+{% endblock %}
+
+{% block body %}
+<h3><a href="/">Search</a></h3>
+{{ chart | safe }}
+{% endblock %}

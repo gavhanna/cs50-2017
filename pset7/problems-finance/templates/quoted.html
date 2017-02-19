@@ -1,0 +1,14 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    Register
+{% endblock %}
+
+{% block main %}
+        {% for item in query_lookup %}
+            <p>{{ item | capitalize() }}: {{ query_lookup[item] }}</p>
+        {% endfor %}
+{% endblock %}
+
+
+<!-- TODO: find out why nothing is printing from the above statement  -->

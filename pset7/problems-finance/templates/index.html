@@ -1,0 +1,39 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    Register
+{% endblock %}
+
+{% block main %}
+    <table class="table table-striped">
+        <thead>
+          <tr>
+            <th>Symbol</th>
+            <th>Name</th>
+            <th>Shares</th>
+            <th>Price</th>
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody>
+            {% for item in portfolio %}
+                <tr>
+                    <td>{{ item.symbol }}</td>
+                    <td>{{ item.name }}</td>
+                    <td>{{ item.shares }}</td>
+                    <td>{{ item.price | usd}}</td>
+                    <td>{{ item.transaction | usd }}</td>
+                </tr>
+            {% endfor %}
+            {% for user in user %}
+                <tr>
+                    <td>CASH</td>
+                    <td colspan="3"></td>
+                    <td><strong>{{ user.cash | usd }}</strong></td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    
+    <div>{{ test }}</div>
+{% endblock %}
