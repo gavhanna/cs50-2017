@@ -54,30 +54,23 @@ pwd_context = CryptContext(
 @login_required
 def index():
 
-    def remove_duplicates(values):
-        output = []
-        seen = set()
-        for value in values:
-            # If value has not been encountered yet,
-            # ... add it to both list and set.
-            if value not in seen:
-                output.append(value)
-                seen.add(value)
-        return output
+    
         
-    portfolio = db.execute("SELECT * FROM portfolio WHERE id = :id", id=session["user_id"])
+    def total_cash():
+        portfolio = db.execute("SELECT * FROM portfolio WHERE id = :id", id=session["user_id"])
+        user = db.execute("SELECT * FROM users WHERE id = :id", id=session["user_id"])
+        total = 0
+        total = total + user[0]["cash"]
+        for item in portfolio:
+            total = total + item['transaction']
+        
+        return total
+        
+    portfolio = db.execute("SELECT * FROM portfolio WHERE id = :id AND shares > 0", id=session["user_id"])
     user = db.execute("SELECT * FROM users WHERE id = :id", id=session["user_id"])
+    total_cash = total_cash()
     
-    
-    
-    test = []
-    for item in portfolio:
-        test.append(item['symbol'])
-    test2 = remove_duplicates(test)
-    
-    
-    
-    return render_template("index.html", portfolio=portfolio, user=user, test=test2)
+    return render_template("index.html", portfolio=portfolio, user=user, total=total_cash)
 
 @app.route("/buy", methods=["GET", "POST"])
 @login_required
@@ -85,13 +78,15 @@ def buy():
     """Buy shares of stock."""
     if request.method == "POST":
         if request.form["symbol"] == "" or request.form["shares"] == "":
-            num = str(session["user_id"])
-            return apology(num)
+            return apology("please enter both a symbol and amount of shares")
             
         query = lookup(request.form["symbol"])
         if isinstance(query, dict) == False:
             return apology("not a valid symbol")
             
+        user = db.execute("SELECT * FROM users WHERE id = :id", id=session["user_id"])
+        user_cash = user[0]["cash"]
+        portfolio = db.execute("SELECT * FROM portfolio WHERE id = :id", id=session["user_id"])
         symbol = query["symbol"]
         name = query["name"]
         stock_price = query["price"]
@@ -99,29 +94,46 @@ def buy():
         user_id = session["user_id"]
         transaction = float("{0:.2f}".format(shares * stock_price))
         
-        if shares > 0:
-            
-            user = db.execute("SELECT * FROM users WHERE id = :id", id=session["user_id"])
-            user_cash = user[0]["cash"]
-            portfolio = db.execute("SELECT * FROM portfolio WHERE id = :id", id=session["user_id"])
+        
+        if shares > 0 and user_cash > transaction:
 
-            if user_cash > transaction:
-                    
-                db.execute("INSERT INTO 'portfolio' ('id','transaction','symbol','name','shares','price') VALUES (:user_id,:transaction,:symbol,:name,:shares,:price)",
-                user_id=int(user_id),
-                transaction=float(transaction),
-                symbol=symbol,
-                name=str(name),
-                shares=int(shares),
-                price=float(stock_price))
-                
+            if any(d['symbol'] == symbol for d in portfolio):
+                db.execute('UPDATE portfolio SET "transaction" = "transaction" + :transaction, shares = shares + :shares WHERE symbol = :symbol AND id = :id;',
+                            transaction=transaction,
+                            shares=shares,
+                            symbol=symbol,
+                            id=user_id)
+                                
                 db.execute("UPDATE users SET cash = cash - :transaction WHERE id = :user_id",
                             transaction=transaction, 
                             user_id=user_id)
-        
-                return redirect(url_for("index"))
-            else:
-                return apology("not enough cash for the transaction")
+                                
+            
+
+            elif not any(d["symbol"] == symbol for d in portfolio):
+                        
+                db.execute("INSERT INTO 'portfolio' ('id','transaction','symbol','name','shares','price') VALUES (:user_id,:transaction,:symbol,:name,:shares,:price)",
+                            user_id=int(user_id),
+                            transaction=float(transaction),
+                            symbol=symbol,
+                            name=str(name),
+                            shares=int(shares),
+                            price=float(stock_price))
+                    
+                db.execute("UPDATE users SET cash = cash - :transaction WHERE id = :user_id",
+                            transaction=transaction, 
+                            user_id=user_id)
+                            
+            db.execute("INSERT INTO 'history' ('id','transaction','symbol','name','shares','price') VALUES (:user_id,:transaction,:symbol,:name,:shares,:price)",
+                            user_id=int(user_id),
+                            transaction=float(transaction),
+                            symbol=symbol,
+                            name=str(name),
+                            shares=int(shares),
+                            price=float(stock_price))
+
+            return redirect(url_for("index"))
+            
         else:
             apology("you don't have any money..")
     else:
@@ -130,8 +142,10 @@ def buy():
 @app.route("/history")
 @login_required
 def history():
-    """Show history of transactions."""
-    return apology("TODO")
+    
+    history = db.execute("SELECT * FROM history WHERE id = :id", id=session["user_id"])
+    
+    return render_template("history.html", history=history)
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -227,11 +241,65 @@ def register():
 @app.route("/sell", methods=["GET", "POST"])
 @login_required
 def sell():
-    """Sell shares of stock."""
-    return apology("TODO")
+    if request.method == "POST":
+        if request.form["symbol"] == "" or request.form["shares"] == "":
+            return apology("please enter both a symbol and amount of shares")
+            
+        query = lookup(request.form["symbol"])
+        if isinstance(query, dict) == False:
+            return apology("not a valid symbol")
+            
+        user = db.execute("SELECT * FROM users WHERE id = :id", id=session["user_id"])
+        user_cash = user[0]["cash"]
+        portfolio = db.execute("SELECT * FROM portfolio WHERE id = :id", id=session["user_id"])
+        symbol = query["symbol"]
+        name = query["name"]
+        stock_price = query["price"]
+        shares = int(request.form["shares"])
+        user_id = session["user_id"]
+        transaction = float("{0:.2f}".format(shares * stock_price))
+        
+        current_portfolio = db.execute("SELECT * FROM portfolio WHERE id = :id AND symbol = :symbol", 
+                                        id=session["user_id"],
+                                        symbol=symbol)
+        current_shares = current_portfolio[0]["shares"]
+        
+        if (current_shares - shares) < 0:
+            return apology("can't sell more than you have...")
+        
+        if shares > 0:
 
+            if any(d['symbol'] == symbol for d in portfolio):
+                db.execute('UPDATE portfolio SET "transaction" = "transaction" - :transaction, shares = shares - :shares WHERE symbol = :symbol AND id = :id;',
+                            transaction=transaction,
+                            shares=shares,
+                            symbol=symbol,
+                            id=user_id)
+                                
+                db.execute("UPDATE users SET cash = cash + :transaction WHERE id = :user_id",
+                            transaction=transaction, 
+                            user_id=user_id)
+                                
+                
 
-
-
-# TODO: recreate the portfolio table but this time make
-# the 'symbol' field unique. Then, i dunno, somehow make that work.
+            elif not any(d["symbol"] == symbol for d in portfolio):
+                        
+                return apology("you don't have any stocks in " + symbol)
+                
+        
+            db.execute("INSERT INTO 'history' ('id','transaction','symbol','name','shares','price') VALUES (:user_id,:transaction,:symbol,:name,-:shares,:price)",
+                            user_id=int(user_id),
+                            transaction=(float(transaction)),
+                            symbol=symbol,
+                            name=str(name),
+                            shares=int(shares),
+                            price=float(stock_price))
+                
+            return redirect(url_for("index"))
+            
+        else:
+            apology("you don't have any money..")
+        
+        return redirect(url_for("index"))
+    else:
+        return render_template("sell.html")
